@@ -23,6 +23,20 @@ namespace webdatsan.Controllers
 
         private readonly PasswordHasher<Users> _passwordHasher = new PasswordHasher<Users>();
 
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+       
 
         public DkDnController(IConfiguration configuration)
         {
@@ -42,7 +56,13 @@ namespace webdatsan.Controllers
                 return BadRequest("Thông tin người dùng không hợp lệ.");
             }
 
+            if (!IsValidEmail(user.Email))
+            {
+                return BadRequest("Địa chỉ email không hợp lệ.");
+            }
+
             user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+
 
             using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
             {
@@ -84,7 +104,8 @@ namespace webdatsan.Controllers
                 }
             }
         }
-
+        
+        //chuc nang test lay thong tin nguoi dung data
 
         [HttpGet]
         [Route("Dangnhap")]
@@ -117,7 +138,7 @@ namespace webdatsan.Controllers
             }
         }
 
-
+        
         [HttpPost]
         [Route("DNhap")]
         public IActionResult DNhap([FromBody] Users user)
@@ -129,7 +150,7 @@ namespace webdatsan.Controllers
             using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
             {
                 con.Open();
-                string query = "SELECT HashedPassword = @HashedPassword FROM users WHERE Email = @Email";
+                string query = "SELECT HashedPassword  FROM users WHERE Email = @Email";
                 using (MySqlCommand cmd = new MySqlCommand(query, con))
                 {
                     cmd.Parameters.AddWithValue("@Email", user.Email);
@@ -203,82 +224,62 @@ namespace webdatsan.Controllers
             }
         }
 
+      
+
         [HttpPost]
-        [Route("quenMK")]
-        public async Task<IActionResult> quenMK([FromBody] Users user)
+        [Route("QuenMK-XN-email")]
+        public async Task<IActionResult> SendEmailAsync([FromBody] Users user)
         {
+            string subject;
+            string body;
+            string toEmail= user.Email;
             if (user == null || user.Email == null)
             {
-                return BadRequest("Thông tin không hợp lệ");
+                 return BadRequest("Thông tin không hợp lệ");
             }
-
             using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
             {
-                await con.OpenAsync(); // Sử dụng await để mở kết nối
-                string query = "SELECT Email FROM users WHERE Email = @Email";
+                con.Open();
+                string query = "SELECT Email FROM users WHERE Email = @Email ";
 
                 using (MySqlCommand cmd = new MySqlCommand(query, con))
                 {
                     cmd.Parameters.AddWithValue("@Email", user.Email);
-                    var EmailCheck = cmd.ExecuteScalarAsync()?.ToString(); // Sử dụng ExecuteScalarAsync
+                    var EmailCheck = cmd.ExecuteScalar()?.ToString();
                     if (EmailCheck == null)
                     {
+                        con.Close();
                         return BadRequest("Không tồn tại Email");
                     }
                 }
             }
-
-            var resetToken = "generate-reset-token-here"; // Thay thế bằng cơ chế sinh token thực tế
-            var resetLink = Url.Action("ResetPassword", "Account", new { token = resetToken }, Request.Scheme);
-            var emailBody = $"Click vào đây để reset mật khẩu của bạn: <a href='{resetLink}'>reset password</a>";
-            var subject = "THÔNG BÁO XÁC NHẬN ĐẶT LẠI MẬT KHẨU CỦA WEB ĐẶT SÂN THỂ THAO";
-
+            body = $"Click vào đây để reset mật khẩu của bạn: <a href=''>reset password</a>";
+            
+            subject = " THÔNG BÁO XÁC NHẬN ĐẶT LẠI MẬT KHẨU CỦA WEB ĐẶT SÂN THỂ THAO ";
+            
             var email = new MimeMessage();
+
             email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]));
-            email.To.Add(new MailboxAddress(user.Email, user.Email));
+
+            email.To.Add(new MailboxAddress(toEmail, toEmail));
+
             email.Subject = subject;
 
-            var builder = new BodyBuilder { HtmlBody = emailBody };
+            var builder = new BodyBuilder { HtmlBody = body };
             email.Body = builder.ToMessageBody();
 
             using (var smtp = new MailKit.Net.Smtp.SmtpClient())
             {
-                await smtp.ConnectAsync(_configuration["EmailSettings:SmtpServer"], int.Parse(_configuration["EmailSettings:SmtpPort"]), MailKit.Security.SecureSocketOptions.StartTls);
-                await smtp.AuthenticateAsync(_configuration["EmailSettings:SenderEmail"], _configuration["EmailSettings:SenderPassword"]);
-                await smtp.SendAsync(email); // Sử dụng await để đợi gửi email hoàn tất
-                await smtp.DisconnectAsync(true); // Ngắt kết nối sau khi gửi
+                smtp.Connect(_configuration["EmailSettings:SmtpServer"], int.Parse(_configuration["EmailSettings:SmtpPort"]), MailKit.Security.SecureSocketOptions.StartTls);
+
+                smtp.Authenticate(_configuration["EmailSettings:SenderEmail"], _configuration["EmailSettings:SenderPassword"]);
+
+                await smtp.SendAsync(email);
+
+                smtp.Disconnect(true);
             }
-
-            return Ok("Email đã được gửi để reset mật khẩu.");
+            return Ok();
         }
-
-        //[HttpPost]
-        //[Route("XN-email")]
-        //    public async Task SendEmailAsync(string toEmail, string subject, string body)
-        //{
-        //   
-        //    var email = new MimeMessage();
-        //   
-        //    email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]));
-
-        //    email.To.Add(new MailboxAddress(toEmail, toEmail));
-
-        //    email.Subject = subject;
-
-        //    var builder = new BodyBuilder { HtmlBody = body };
-        //    email.Body = builder.ToMessageBody();
-
-        //    using (var smtp = new MailKit.Net.Smtp.SmtpClient()) 
-        //    {
-        //        smtp.Connect(_configuration["EmailSettings:SmtpServer"], int.Parse(_configuration["EmailSettings:SmtpPort"]), MailKit.Security.SecureSocketOptions.StartTls);
-
-        //        smtp.Authenticate(_configuration["EmailSettings:SenderEmail"], _configuration["EmailSettings:SenderPassword"]);
-
-        //        await smtp.SendAsync(email);
-
-        //        smtp.Disconnect(true);
-        //    }
-        //}
 
 
 

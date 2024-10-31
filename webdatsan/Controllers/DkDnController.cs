@@ -61,7 +61,7 @@ namespace webdatsan.Controllers
                 return BadRequest("Địa chỉ email không hợp lệ.");
             }
 
-            user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+            //user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
 
 
             using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
@@ -80,6 +80,7 @@ namespace webdatsan.Controllers
                     }
 
                 }
+user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
 
 
                 string query = "INSERT INTO users (Username ,Email, HashedPassword, Role) VALUES (@Email ,@Email, @HashedPassword, 0)";

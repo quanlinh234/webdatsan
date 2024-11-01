@@ -1,4 +1,4 @@
-﻿using MailKit.Net.Smtp;
+using MailKit.Net.Smtp;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -11,6 +11,11 @@ using Org.BouncyCastle.Asn1.Ocsp;
 using System.Data.SqlClient;
 using System.Net.Http;
 using System.Net.Mail;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
 using webdatsan.Models;
 
 namespace webdatsan.Controllers
@@ -20,7 +25,7 @@ namespace webdatsan.Controllers
     public class DkDnController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-
+        
         private readonly PasswordHasher<Users> _passwordHasher = new PasswordHasher<Users>();
 
         private bool IsValidEmail(string email)
@@ -43,6 +48,90 @@ namespace webdatsan.Controllers
             _configuration = configuration;
 
         }
+        private ClaimsIdentity GenerateClaims(Users user)
+{
+    var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.Name, user.FullName ?? string.Empty),         // Tên đầy đủ
+        new Claim(ClaimTypes.Email, user.Email ?? string.Empty),           // Email
+        new Claim(ClaimTypes.MobilePhone, user.PhoneNumber ?? string.Empty), // Số điện thoại
+        new Claim("FCMToken", user.FCMToken ?? string.Empty),              // FCMToken, sử dụng tên tùy chỉnh
+        new Claim("DateOfBirth", user.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty), // Ngày sinh
+        new Claim("Gender", user.Gender?.ToString() ?? string.Empty),      // Giới tính
+        new Claim(ClaimTypes.StreetAddress, user.Address ?? string.Empty), // Địa chỉ
+        new Claim(ClaimTypes.Role, user.Role.ToString())                   // Vai trò
+    };
+
+    return new ClaimsIdentity(claims);
+    }
+        
+
+        public string GenerateToken(Users user)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes("1qaz2wsx");
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(key),
+            SecurityAlgorithms.HmacSha256Signature);
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = GenerateClaims(user),
+            Expires = DateTime.UtcNow.AddMinutes(15),
+            //thời gian hết hạn 15 phút
+            SigningCredentials = credentials,
+        };
+
+        var token = handler.CreateToken(tokenDescriptor);
+        return handler.WriteToken(token);
+        }
+
+
+        public ClaimsPrincipal ValidateToken(string token)
+{
+    var tokenHandler = new JwtSecurityTokenHandler();
+    var key = Encoding.ASCII.GetBytes("1qaz2wsx"); // Khóa bí mật đã dùng trong GenerateToken
+
+    var validationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ClockSkew = TimeSpan.Zero // Không cho phép thời gian chênh lệch
+    };
+
+    try
+    {
+        // Xác thực token
+        ClaimsPrincipal principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
+
+        // Kiểm tra nếu token đã được ký bằng thuật toán mong muốn
+        if (validatedToken is JwtSecurityToken jwtToken &&
+            jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+        {
+            return principal; // Token hợp lệ
+        }
+    }
+    catch
+    {
+        // Nếu có lỗi khi xác thực token
+        return null;
+    }
+
+    return null; // Token không hợp lệ
+    }
+        [HttpPost]
+        [Route("checktoken")]
+            public IActionResult CheckToken(string token) {
+            var principal = ValidateToken(token);
+            if (principal == null)
+            {
+                return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
+                
+            }
+            return Ok("Thành Công ") ;
+        }
 
 
 
@@ -61,7 +150,7 @@ namespace webdatsan.Controllers
                 return BadRequest("Địa chỉ email không hợp lệ.");
             }
 
-            //user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+            
 
 
             using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
@@ -80,15 +169,18 @@ namespace webdatsan.Controllers
                     }
 
                 }
-user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+                user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+
+            string token = GenerateToken(user);
 
 
-                string query = "INSERT INTO users (Username ,Email, HashedPassword, Role) VALUES (@Email ,@Email, @HashedPassword, 0)";
+                string query = "INSERT INTO users (Username ,Email, HashedPassword, Role ,Token) VALUES (@Email ,@Email, @HashedPassword, 0 ,@Token)";
 
                 using (MySqlCommand cmd = new MySqlCommand(query, con))
                 {
                     cmd.Parameters.AddWithValue("@Email", user.Email);
                     cmd.Parameters.AddWithValue("@HashedPassword", user.HashedPassword);
+                    cmd.Parameters.AddWithValue("@Token", token);
 
                     int rowsAffected = cmd.ExecuteNonQuery();
 
@@ -284,11 +376,5 @@ user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
 
 
 
-
-
-
-    }
-
 }
-    
-
+}

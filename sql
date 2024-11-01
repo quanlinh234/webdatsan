@@ -12,7 +12,8 @@ CREATE TABLE USERS (
     DateOfBirth DATE,
     Gender SMALLINT,
     Address VARCHAR(500),
-    Role SMALLINT
+    Role SMALLINT,
+    Token VARCHAR(1024)
 );
 
 CREATE TABLE YARD_TYPES (

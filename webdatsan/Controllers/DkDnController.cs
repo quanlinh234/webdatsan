@@ -411,3 +411,485 @@ GenerateToken(user);
             {
                 return BadRequest("Thông tin người dùng không hợp lệ.");
             }
+using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+            {
+                con.Open();
+
+                string query = "UPDATE users SET Username = @Username, PhoneNumber = @PhoneNumber, FullName = @FullName, DateOfBirth = @DateOfBirth, Gender = @Gender, Address = @Address WHERE Email = @Email";
+
+                using (MySqlCommand cmd = new MySqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@username", user.Username);
+                    cmd.Parameters.AddWithValue("@PhoneNumber", user.PhoneNumber);
+                    cmd.Parameters.AddWithValue("@FullName", user.FullName);
+                    cmd.Parameters.AddWithValue("@DateOfBirth", user.DateOfBirth);
+                    cmd.Parameters.AddWithValue("@Gender", user.Gender);
+                    cmd.Parameters.AddWithValue("@Address", user.Address);
+                    cmd.Parameters.AddWithValue("@Email", user.Email);
+
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        return Ok("Thông tin người dùng đã được cập nhật thành công.");
+                    }
+                    else
+                    {
+                        return StatusCode(500, "Lỗi khi cập nhật thông tin người dùng.");
+                    }
+                }
+            }
+        }
+//Chức năng thay đổi ít thông tin 
+        [HttpPost]
+        [Route("ThaydoiTT")]
+        public IActionResult ThaydoiTT([FromBody] Users user)
+        {
+            if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.HashedPassword))
+            {
+                return BadRequest("Thông tin người dùng không hợp lệ.");
+            }
+
+            using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+            {
+                con.Open();
+
+                string query = "UPDATE users SET PhoneNumber = @PhoneNumber, FullName = @FullName, DateOfBirth = @DateOfBirth, Gender = @Gender, Address = @Address ,Email = @Email WHERE Username = @Username";
+
+                using (MySqlCommand cmd = new MySqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@username", user.Username);
+                    cmd.Parameters.AddWithValue("@PhoneNumber", user.PhoneNumber);
+                    cmd.Parameters.AddWithValue("@FullName", user.FullName);
+                    cmd.Parameters.AddWithValue("@DateOfBirth", user.DateOfBirth);
+                    cmd.Parameters.AddWithValue("@Gender", user.Gender);
+                    cmd.Parameters.AddWithValue("@Address", user.Address);
+                    cmd.Parameters.AddWithValue("@Email", user.Email);
+
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        return Ok("Thông tin người dùng đã được cập nhật thành công.");
+                    }
+                    else
+                    {
+                        return StatusCode(500, "Lỗi khi cập nhật thông tin người dùng.");
+                    }
+                }
+            }
+        }
+
+        // Thay đổi thông tin bằng token
+        [HttpPost]
+[Route("ThaydoiTTbangTK")]
+public IActionResult ThaydoiTT([FromQuery] string token, [FromBody] Users user)
+{
+    if (string.IsNullOrEmpty(token))
+    {
+        return BadRequest("Token không hợp lệ.");
+    }
+
+    // Xác thực token
+    Users authenticatedUser = ValidateToken(token);
+    if (authenticatedUser == null)
+    {
+        return Unauthorized("Token không hợp lệ.");
+    }
+
+    // Kiểm tra nếu Username và Email trong token không khớp với thông tin từ body
+    if (authenticatedUser.Username != user.Username || authenticatedUser.Email != user.Email)
+    {
+        return Unauthorized("Username hoặc Email không hợp lệ.");
+    }
+// Kết nối cơ sở dữ liệu và cập nhật thông tin người dùng
+    using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+    {
+        con.Open();
+
+        string query = "UPDATE users SET PhoneNumber = @PhoneNumber, FullName = @FullName, DateOfBirth = @DateOfBirth, Gender = @Gender, Address = @Address, Email = @Email WHERE Username = @Username";
+
+        using (MySqlCommand cmd = new MySqlCommand(query, con))
+        {
+            cmd.Parameters.AddWithValue("@Username", user.Username);
+            cmd.Parameters.AddWithValue("@PhoneNumber", user.PhoneNumber);
+            cmd.Parameters.AddWithValue("@FullName", user.FullName);
+            cmd.Parameters.AddWithValue("@DateOfBirth", user.DateOfBirth);
+            cmd.Parameters.AddWithValue("@Gender", user.Gender);
+            cmd.Parameters.AddWithValue("@Address", user.Address);
+            cmd.Parameters.AddWithValue("@Email", user.Email);
+
+            int rowsAffected = cmd.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                // Kiểm tra xem có cần tạo lại token không
+                bool isSensitiveDataChanged = authenticatedUser.Email != user.Email || authenticatedUser.Username != user.Username;
+                if (isSensitiveDataChanged)
+                {
+                    // Tạo lại token mới với thông tin đã cập nhật
+                    string newToken = GenerateToken(user); // Hàm tạo token mới
+                    return Ok(new { Message = "Thông tin người dùng đã được cập nhật thành công.", Token = newToken });
+                }
+
+                return Ok("Thông tin người dùng đã được cập nhật thành công.");
+            }
+            else
+            {
+                return StatusCode(500, "Lỗi khi cập nhật thông tin người dùng.");
+            }
+        }
+    }
+    }
+
+        //Chức năng thay đổi mật khẩu 
+        [HttpPost]
+        [Route("DoiMK")]
+        public IActionResult DoiMK([FromBody] Users user)
+        {
+            if (user == null || string.IsNullOrEmpty(user.Email) && string.IsNullOrEmpty(user.HashedPassword ))
+            {
+                return BadRequest("Thông tin người dùng không hợp lệ.");
+            }
+            user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
+
+            using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+            {
+                con.Open();
+
+                string query = "UPDATE users SET HashedPassword = @HashedPassword WHERE Email = @Email";
+
+                using (MySqlCommand cmd = new MySqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@HashedPassword", user.HashedPassword);
+                    cmd.Parameters.AddWithValue("@Email", user.Email);
+
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        return Ok("Thông tin người dùng đã được cập nhật thành công.");
+                    }
+                    else
+                    {
+                        return StatusCode(500, "Lỗi khi cập nhật mật khẩu người dùng.");
+                    }
+                }
+            }
+            }
+        //Chức năng thay đổi khẩu bằng token
+   [HttpPost]
+[Route("DoiMKbangTK")]
+public IActionResult DoiMK([FromQuery] string token, [FromBody] string newPassword)
+{
+    if (string.IsNullOrEmpty(token))
+    {
+        return BadRequest("Token không hợp lệ.");
+    }
+
+    if (string.IsNullOrEmpty(newPassword))
+    {
+        return BadRequest("Mật khẩu mới không hợp lệ.");
+    }
+
+    // Xác thực token và lấy thông tin người dùng
+    Users user = ValidateToken(token);
+    if (user == null)
+    {
+        return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
+    }
+
+    // Hash mật khẩu mới
+    user.HashedPassword = _passwordHasher.HashPassword(user, newPassword);
+
+    // Kết nối cơ sở dữ liệu và cập nhật mật khẩu
+    using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+    {
+        con.Open();
+
+        string query = "UPDATE users SET HashedPassword = @HashedPassword WHERE Email = @Email";
+
+        using (MySqlCommand cmd = new MySqlCommand(query, con))
+        {
+            cmd.Parameters.AddWithValue("@HashedPassword", user.HashedPassword);
+            cmd.Parameters.AddWithValue("@Email", user.Email);
+
+            int rowsAffected = cmd.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                return Ok("Mật khẩu đã được cập nhật thành công.");
+            }
+            else
+            {
+                return StatusCode(500, "Lỗi khi cập nhật mật khẩu người dùng.");
+            }
+        }
+    }
+    }
+
+        //Chức năng reset mật khẩu 
+        [HttpPost]
+[Route("resetMK")]
+public IActionResult ResetMK([FromQuery] string token)
+{
+    if (string.IsNullOrEmpty(token))
+    {
+        return BadRequest("Token không hợp lệ.");
+    }
+
+    // Xác thực token và lấy thông tin người dùng
+    Users user = ValidateToken(token);
+    if (user == null)
+    {
+        return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
+    }
+// Tạo mật khẩu tạm thời và hash nó
+    var tempPassword = Guid.NewGuid().ToString().Substring(0, 8);
+    var hashedPassword = _passwordHasher.HashPassword(user, tempPassword);
+
+    // Kết nối cơ sở dữ liệu và cập nhật mật khẩu
+    using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+    {
+        con.Open();
+
+        string query = "UPDATE users SET HashedPassword = @HashedPassword WHERE Email = @Email";
+
+        using (MySqlCommand cmd = new MySqlCommand(query, con))
+        {
+            cmd.Parameters.AddWithValue("@HashedPassword", hashedPassword);
+            cmd.Parameters.AddWithValue("@Email", user.Email);
+
+            int rowsAffected = cmd.ExecuteNonQuery();
+
+            if (rowsAffected > 0)
+            {
+                return Ok("Mật khẩu đã được đặt lại thành công. Mật khẩu mới là: " + tempPassword);
+            }
+            else
+            {
+                return StatusCode(500, "Lỗi khi đặt lại mật khẩu.");
+            }
+        }
+    }
+    }
+
+
+//
+        [HttpGet]
+        [Route("PageUser")]
+        public IActionResult PageUser([FromQuery] int page = 0, [FromQuery] int size = 10)
+        {
+            List<object> users = new List<object>();
+            int totalUsers = 0;
+using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+            {
+                con.Open();
+
+                // Truy vấn tổng số người dùng
+                string countQuery = "SELECT COUNT(*) FROM users";
+                using (MySqlCommand countCmd = new MySqlCommand(countQuery, con))
+                {
+                    totalUsers = Convert.ToInt32(countCmd.ExecuteScalar());
+                }
+
+                // Tính tổng số trang dựa trên số lượng người dùng và kích thước trang
+                int totalPages = (int)Math.Ceiling((double)totalUsers / size);
+
+                // Truy vấn dữ liệu người dùng với phân trang
+                string query = "SELECT * FROM users LIMIT @Offset, @Size";
+                using (MySqlCommand cmd = new MySqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@Offset", page * size);
+                    cmd.Parameters.AddWithValue("@Size", size);
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            users.Add(new
+                            {
+                                Id = reader["Id"],
+                                Email = reader["Email"],
+                                PhoneNumber = reader["PhoneNumber"],
+                                FullName = reader["FullName"],
+                                DateOfBirth = reader["DateOfBirth"],
+                                Gender = reader["Gender"],
+                                Address = reader["Address"],
+                                Role = reader["Role"]
+                            });
+                        }
+                    }
+                }
+
+                // Kiểm tra nếu không có dữ liệu
+                if (users.Count == 0)
+                {
+                    return BadRequest("Không có dữ liệu");
+                }
+
+                // Tạo response
+                var response = new
+                {
+                    totalPages = totalPages,
+                    currentPage = page,
+                    users = users
+                };
+
+                return Ok(response);
+    }
+}
+// đăng ký bằng google
+        [HttpPost]
+        [Route("GoogleLogin")]
+        public async Task<IActionResult> GoogleLogin([FromBody] string idToken)
+        {
+            try
+            {
+                // Xác minh token với Google
+                var payload = await GoogleJsonWebSignature.ValidateAsync(idToken);
+
+                if (payload == null)
+                {
+                    return BadRequest("Token không hợp lệ.");
+                }
+
+                var email = payload.Email;
+                var fullName = payload.Name;
+
+                // Tạo mật khẩu ngẫu nhiên cho người dùng mới
+                var tempPassword = Guid.NewGuid().ToString().Substring(0, 8);
+                var hashedPassword = _passwordHasher.HashPassword(null, tempPassword);
+
+                // Kết nối cơ sở dữ liệu MySQL
+                using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+                {
+                    con.Open();
+
+                    // Kiểm tra xem email đã tồn tại chưa
+                    string queryCheck = "SELECT COUNT(*) FROM users WHERE Email = @Email";
+                    using (MySqlCommand cmdCheck = new MySqlCommand(queryCheck, con))
+                    {
+                        cmdCheck.Parameters.AddWithValue("@Email", email);
+                        int count = Convert.ToInt32(cmdCheck.ExecuteScalar());
+
+                        if (count > 0)
+                        {
+                            return BadRequest("Email đã tồn tại");
+                        }
+                    }
+
+                    // Thêm người dùng mới vào cơ sở dữ liệu
+                    string queryInsert = "INSERT INTO users (Username, Email, HashedPassword, Role) VALUES (@Email, @Email, @HashedPassword, 0)";
+                    using (MySqlCommand cmdInsert = new MySqlCommand(queryInsert, con))
+                    {
+                        cmdInsert.Parameters.AddWithValue("@Username", email);
+                        
+                        cmdInsert.Parameters.AddWithValue("@HashedPassword", hashedPassword);
+
+                        cmdInsert.ExecuteNonQuery();
+                    }
+
+                    con.Close();
+                }
+// Trả về thông tin người dùng
+                // LƯU Ý SAU KHI DK THÀNH CÔNG CÓ TRẢ VỀ MK RANDOM , EMAIL CHO NGƯỜI DÙNG THÌ FE CHUYEN QUA TRANG ĐỔI MK CHO NGƯỜI DÙNG ĐỔI LẠI MK MỚI
+                return Ok(new
+                {
+                    Email = email,
+                    FullName = fullName,
+                    tempPassword = tempPassword,
+                    Message = "Đăng ký thành công"
+                });
+            }
+            catch
+            {
+                return BadRequest("Đã xảy ra lỗi khi xác thực với Google.");
+            }
+        }
+        
+    
+        
+//
+        
+        
+        [HttpPost]
+        [Route("QuenMK-XN-email")]
+        public async Task<IActionResult> SendEmailAsync([FromBody] Users user)
+        {
+            string subject;
+            string body;
+            string toEmail= user.Email;
+            string token = null ;
+            if (user == null || user.Email == null)
+            {
+                 return BadRequest("Thông tin không hợp lệ");
+            }
+            using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
+            {
+                con.Open();
+                string query = "SELECT Email , Token FROM users WHERE Email = @Email ";
+                
+                
+                using (MySqlCommand cmd = new MySqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@Email", user.Email);
+                    using (MySqlDataReader reader = cmd.ExecuteReader())
+    {
+        if (reader.Read())
+        {
+            // Lấy token từ kết quả truy vấn
+            token = reader["Token"].ToString();         
+                    
+                    var EmailCheck = cmd.ExecuteScalar()?.ToString();
+                    if (EmailCheck == null)
+                    {
+                        con.Close();
+                        return BadRequest("Không tồn tại Email");
+                    }
+            
+            }
+        }
+                    }
+            body = $"Click vào đây để reset mật khẩu của bạn: <a href=' http://localhost:3000/resetMK?token={token}'>reset password</a>";
+
+        subject = " THÔNG BÁO XÁC NHẬN ĐẶT LẠI MẬT KHẨU CỦA WEB ĐẶT SÂN THỂ THAO ";
+            
+            var email = new MimeMessage();
+
+            email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]));
+
+            email.To.Add(new MailboxAddress(toEmail, toEmail));
+
+            email.Subject = subject;
+
+            var builder = new BodyBuilder { HtmlBody = body };
+            email.Body = builder.ToMessageBody();
+
+            using (var smtp = new MailKit.Net.Smtp.SmtpClient())
+            {
+                smtp.Connect(_configuration["EmailSettings:SmtpServer"], int.Parse(_configuration["EmailSettings:SmtpPort"]), MailKit.Security.SecureSocketOptions.StartTls);
+
+                smtp.Authenticate(_configuration["EmailSettings:SenderEmail"], _configuration["EmailSettings:SenderPassword"]);
+
+                await smtp.SendAsync(email);
+
+                smtp.Disconnect(true);
+            }
+            return Ok();
+        }
+    }
+
+
+
+
+
+
+    }
+
+}
+    
+

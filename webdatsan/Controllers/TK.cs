@@ -17,8 +17,10 @@ namespace webdatsan.Controllers
     {
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString() ?? string.Empty),
         new Claim(ClaimTypes.Name, user.FullName ?? string.Empty),
-        new Claim(ClaimTypes.Name, user.Username ?? string.Empty),  
-        // Tên đầy đủ
+        new Claim(ClaimTypes.Name, user.Username ?? string.Empty),
+        new Claim("FullName", user.FullName ?? string.Empty),
+        new Claim("PhoneNumber", user.PhoneNumber ?? string.Empty),
+        new Claim("Address", user.Address ?? string.Empty),
         new Claim(ClaimTypes.Email, user.Email ?? string.Empty),           // Email
         new Claim(ClaimTypes.MobilePhone, user.PhoneNumber ?? string.Empty), // Số điện thoại
         new Claim("FCMToken", user.FCMToken ?? string.Empty),              // FCMToken, sử dụng tên tùy chỉnh
@@ -50,7 +52,7 @@ namespace webdatsan.Controllers
         }
         public Users ValidateToken(string token)
         {
-
+            Console.WriteLine(token);
            
                         var tokenHandler = new JwtSecurityTokenHandler();
                         var key = Encoding.ASCII.GetBytes("0123456789012345678901234567890123456789");
@@ -71,11 +73,12 @@ namespace webdatsan.Controllers
                 if (validatedToken is JwtSecurityToken jwtToken &&
                     jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
                 {
+                    Console.WriteLine("99999999999999");
                     var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                     var userName = principal.FindFirst(ClaimTypes.Name)?.Value;
                     var email = principal.FindFirst(ClaimTypes.Email)?.Value;
                     var roleString = principal.FindFirst(ClaimTypes.Role)?.Value;
-                    // Lấy thêm các claim khác nếu có
+                    
                     var fullName = principal.FindFirst("FullName")?.Value;
                     var phoneNumber = principal.FindFirst("PhoneNumber")?.Value;
                     var address = principal.FindFirst("Address")?.Value;
@@ -97,7 +100,7 @@ namespace webdatsan.Controllers
                         DateOfBirth = dateOfBirth != null ? DateTime.Parse(dateOfBirth) : (DateTime?)null,
                         Gender = gender != null ? short.Parse(gender) : (short?)null,
                     };
-
+                    
                     // Trả về đối tượng user
                     return user;
 

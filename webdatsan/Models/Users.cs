@@ -14,5 +14,6 @@
         public short? Gender { get; set; }
         public string? Address { get; set; }
         public short Role { get; set; }
+        public string Token { get; set; } 
     }
 }

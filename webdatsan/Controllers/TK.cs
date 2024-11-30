@@ -16,8 +16,7 @@ namespace webdatsan.Controllers
             var claims = new List<Claim>
     {
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString() ?? string.Empty),
-        new Claim(ClaimTypes.Name, user.FullName ?? string.Empty),
-        new Claim(ClaimTypes.Name, user.Username ?? string.Empty),
+        new Claim("Username", user.Username ?? string.Empty),
         new Claim("FullName", user.FullName ?? string.Empty),
         new Claim("PhoneNumber", user.PhoneNumber ?? string.Empty),
         new Claim("Address", user.Address ?? string.Empty),
@@ -75,7 +74,7 @@ namespace webdatsan.Controllers
                 {
                     Console.WriteLine("99999999999999");
                     var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    var userName = principal.FindFirst(ClaimTypes.Name)?.Value;
+                    var userName = principal.FindFirst("Username")?.Value;
                     var email = principal.FindFirst(ClaimTypes.Email)?.Value;
                     var roleString = principal.FindFirst(ClaimTypes.Role)?.Value;
                     

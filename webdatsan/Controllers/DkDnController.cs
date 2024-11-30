@@ -186,13 +186,13 @@ namespace webdatsan.Controllers
         public IActionResult CheckToken(string token)
         {
             TK tken = new TK();
-            var principal = tken.ValidateToken(token);
-            if (principal == null)
+            Users validatedUser = tken.ValidateToken(token);
+            if (validatedUser == null)
             {
                 return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
 
             }
-            return Ok("Thành Công ");
+            return Ok(validatedUser);
         }
 
 
@@ -231,25 +231,30 @@ namespace webdatsan.Controllers
                     }
 
                 }
+                string email = user.Email;
+                string UsernameDK = email.Contains("@") ? email.Substring(0, email.IndexOf('@')) : string.Empty;
+
                 user.HashedPassword = _passwordHasher.HashPassword(user, user.HashedPassword);
-                TK tken = new TK();
-                string token = tken.GenerateToken(user);
+                //TK tken = new TK();
+                //string token = tken.GenerateToken(user);
+                //Users validatedUser = tken.ValidateToken(user.Token);
 
-
-                string query = "INSERT INTO users (Username ,Email, HashedPassword, Role ,Token) VALUES (@Email ,@Email, @HashedPassword, 0 ,@Token)";
-
+                //string query = "INSERT INTO users (Username ,Email, HashedPassword, Role ,Token) VALUES (@Email ,@Email, @HashedPassword, 0 ,@Token)";
+                string query = "INSERT INTO users (Username ,Email, HashedPassword, Role ) VALUES (@Username ,@Email, @HashedPassword, 0 )";
                 using (MySqlCommand cmd = new MySqlCommand(query, con))
                 {
+                    cmd.Parameters.AddWithValue("@Username",UsernameDK);
                     cmd.Parameters.AddWithValue("@Email", user.Email);
                     cmd.Parameters.AddWithValue("@HashedPassword", user.HashedPassword);
-                    cmd.Parameters.AddWithValue("@Token", token);
+                    //cmd.Parameters.AddWithValue("@Token", token);
 
                     int rowsAffected = cmd.ExecuteNonQuery();
 
                     if (rowsAffected > 0)
                     {
                         con.Close();
-                        return Ok("Người dùng đã được đăng ký thành công.");
+                        //return Ok(validatedUser + token);
+                        return Ok("Đăng ký thành công. Vui lòng đăng nhập để kích hoạt");
                     }
                     else
                     {
@@ -346,88 +351,96 @@ namespace webdatsan.Controllers
 
         //
 
+        
+        
+        //
+
         [HttpPost]
         [Route("DNhap")]
         public IActionResult DNhap([FromBody] Users user)
         {
-            if (user.Token == null)
+            TK tken = new TK();
+            if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.HashedPassword))
             {
-                if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.HashedPassword))
-                {
-                    return BadRequest("Thông tin người dùng không hợp lệ.");
-                }
+                return BadRequest("Thông tin người dùng không hợp lệ.");
+            }
+            
+            try
+            {
                 using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
                 {
-                    con.Open();
-                    string query = "SELECT HashedPassword  FROM users WHERE Email = @Email";
-                    using (MySqlCommand cmd = new MySqlCommand(query, con))
+                    con.Open(); // Mở kết nối trước khi thực hiện lệnh SQL
+
+                    // Kiểm tra token trong cơ sở dữ liệu
+                    string queryToken = "SELECT Token FROM users WHERE Token = @Token";
+                    using (MySqlCommand cmdToken = new MySqlCommand(queryToken, con))
                     {
-                        cmd.Parameters.AddWithValue("@Email", user.Email);
-                        cmd.Parameters.AddWithValue("@HashedPassword", user.HashedPassword);
-
-                        var hashedPasswordFromDb = cmd.ExecuteScalar()?.ToString();
-
-                        if (hashedPasswordFromDb == null)
+                        cmdToken.Parameters.AddWithValue("@Token", user.Token);
+                        var tokenFromDb = cmdToken.ExecuteScalar()?.ToString();
+                        Console.WriteLine(tokenFromDb);
+                        // Nếu token tồn tại
+                        if (!string.IsNullOrEmpty(tokenFromDb))
                         {
-                            con.Close();
+                            Users validatedUser = tken.ValidateToken(user.Token);
+                            if (validatedUser != null)
+                            {
+                                return Ok(validatedUser);
+                            }
+                            else
+                            {
+                                return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
+                            }
+                        }
+                    }
+
+                    // Kiểm tra email và mật khẩu
+                    string queryPassword = "SELECT HashedPassword FROM users WHERE Email = @Email";
+                    using (MySqlCommand cmdPassword = new MySqlCommand(queryPassword, con))
+                    {
+                        cmdPassword.Parameters.AddWithValue("@Email", user.Email);
+
+                        var hashedPasswordFromDb = cmdPassword.ExecuteScalar()?.ToString();
+
+                        if (string.IsNullOrEmpty(hashedPasswordFromDb))
+                        {
                             return BadRequest("Người dùng không tồn tại.");
                         }
 
+                        // Xác minh mật khẩu
                         var passwordVerificationResult = _passwordHasher.VerifyHashedPassword(new Users(), hashedPasswordFromDb, user.HashedPassword);
-                        TK tken = new TK();
-                        tken.GenerateToken(user);
+
                         if (passwordVerificationResult == PasswordVerificationResult.Success)
                         {
-                            con.Close();
-                            return Ok("Đăng nhập thành công.");
+                            // Tạo token mới
+                            string newToken = tken.GenerateToken(user);
+                            string queryToken1 = "UPDATE users SET Token = @Token WHERE Email = @Email";
+                            using (MySqlCommand cmdToken = new MySqlCommand(queryToken1, con))
+                            {
+                                cmdToken.Parameters.AddWithValue("@Token", newToken);
+                            
+                                cmdToken.Parameters.AddWithValue("@Email", user.Email);
+
+                                cmdToken.ExecuteNonQuery();
+                            }
+
+                                return Ok(new { Message = "Đăng nhập thành công.", Token = newToken });
                         }
                         else
                         {
-                            con.Close();
                             return Unauthorized("Mật khẩu không đúng.");
                         }
                     }
                 }
-                return Ok();
             }
-            else
+            catch (Exception ex)
             {
-
-                using (MySqlConnection con = new MySqlConnection(_configuration.GetConnectionString("ketnoi")))
-                {
-                    con.Open();
-                    string query = "SELECT Token  FROM users WHERE Token = @Token";
-                    using (MySqlCommand cmd = new MySqlCommand(query, con))
-                    {
-                        cmd.Parameters.AddWithValue("@Token", user.Token);
-                        var tokenFromDb = cmd.ExecuteScalar()?.ToString();
-
-                        if (tokenFromDb == null)
-                        {
-                            con.Close();
-                            return BadRequest("Người dùng không tồn tại.");
-                        }
-
-                        TK tken = new TK();
-                        Users user1 = tken.ValidateToken(tokenFromDb);
-                        Console.WriteLine(user1);
-
-                        if (user1 != null)
-                        {
-                            
-                            return Ok(user1) ;
-                        }
-                        else
-                        {
-                            return Unauthorized("Token không hợp lệ hoặc đã hết hạn.");
-                        }
-
-                    }
-                }
-                return Ok("ok");
+                // Ghi log lỗi hoặc xử lý ngoại lệ
+                return StatusCode(500, $"Lỗi hệ thống: {ex.Message}");
             }
-
         }
+
+
+
         // Chức năng thay đổi nhiều thông tin 
 
 
@@ -668,7 +681,7 @@ namespace webdatsan.Controllers
         }
 
         //Chức năng reset mật khẩu 
-        [HttpPost]
+        [HttpGet]
         [Route("resetMK")]
         public IActionResult ResetMK([FromQuery] string token)
         {
@@ -704,10 +717,12 @@ namespace webdatsan.Controllers
 
                     if (rowsAffected > 0)
                     {
+                        con.Close();
                         return Ok("Mật khẩu đã được đặt lại thành công. Mật khẩu mới là: " + tempPassword);
                     }
                     else
                     {
+                        con.Close();
                         return StatusCode(500, "Lỗi khi đặt lại mật khẩu.");
                     }
                 }
@@ -882,18 +897,16 @@ namespace webdatsan.Controllers
                         {
                             // Lấy token từ kết quả truy vấn
                             token = reader["Token"].ToString();
-
-                            var EmailCheck = cmd.ExecuteScalar()?.ToString();
-                            if (EmailCheck == null)
-                            {
-                                con.Close();
+                                                            
+                            con.Close();
+                        }
+                        else
+                        {
                                 return BadRequest("Không tồn tại Email");
-                            }
-
                         }
                     }
                 }
-                body = $"Click vào đây để reset mật khẩu của bạn: <a href=' http://localhost:3000/resetMK?token={token}'>reset password</a>";
+                body = $"Click vào đây để reset mật khẩu của bạn: <a href='http://localhost:8000/api/resetMK?token={token}'>reset password</a>";
 
                 subject = " THÔNG BÁO XÁC NHẬN ĐẶT LẠI MẬT KHẨU CỦA WEB ĐẶT SÂN THỂ THAO ";
 
@@ -918,6 +931,7 @@ namespace webdatsan.Controllers
 
                     smtp.Disconnect(true);
                 }
+                con.Close();
                 return Ok();
             }
         }
